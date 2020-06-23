@@ -1,4 +1,9 @@
+
+#include <MPU6050.h>
+#include <I2Cdev.h>
 #include <IBusBM.h>
+#include "wire.h"
+
 #include <Servo.h>     //Servo library
 #include "CytronMotorDriver.h" //Motor Shield Library
 
@@ -59,15 +64,20 @@ int dbg;
 int ch7; // Debug speed
 int pause;
 
-
+int16_t ax, ay, az;
+int16_t gx, gy, gz;
 
 
 //Output Variables
 //----------------
 int LMot;
+int LPin = 44;
+int LDirPin = 42;
+
 int RMot;
-CytronMD motor1(PWM_DIR, 9, 8);   // PWM1 = Pin 9 , DIR1 = Pin 8.
-CytronMD motor2(PWM_DIR, 11, 13); // PWM2 = Pin 11, DIR2 = Pin 13.
+int RPin = 45;
+int RDirPin = 43;
+
 
 
 //Constants
@@ -76,10 +86,10 @@ int deadband=50;
 
 IBusBM IBus;    // IBus object
 
-//Servp Variables TEMPORARY
-Servo servo_test;      //initialize a servo object for the connected servo            
-int angle = 0;    
-unsigned long starttime=0;
+
+//Gyro Stuff
+MPU6050 accelgyro;
+//MPU6050 accelgyro(0x69); // <-- use for AD0 high
 
 
 void setup() {
@@ -89,23 +99,71 @@ void setup() {
   pinMode(23, INPUT);
   pinMode(41, INPUT); // Set our input pins as such
   pinMode(24, INPUT);
-
-
-  servo_test.attach(31); 
+  
+  pinMode(LPin, OUTPUT); // Set our output pins as such
+  pinMode(RPin, OUTPUT);
+  pinMode(LDirPin, OUTPUT);
+  pinMode(RDirPin, OUTPUT);
+  
   
   Serial.begin(19200); // Pour a bowl of Serial
   IBus.begin(Serial1);    // iBUS object connected to serial0 RX pin
   dbg=1;
+
+
+
+  //GYRO STUFF_____________________________________________________
+      // join I2C bus (I2Cdev library doesn't do this automatically)
+    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
+        Wire.begin();
+    #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
+        Fastwire::setup(400, true);
+    #endif
+
+
+
+    // initialize device
+    Serial.println("Initializing I2C devices...");
+    accelgyro.initialize();
+
+    // verify connection
+    Serial.println("Testing device connections...");
+    Serial.println(accelgyro.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
+
+    // use the code below to change accel/gyro offset values
+    /*
+    Serial.println("Updating internal sensor offsets...");
+    // -76  -2359 1688  0 0 0
+    Serial.print(accelgyro.getXAccelOffset()); Serial.print("\t"); // -76
+    Serial.print(accelgyro.getYAccelOffset()); Serial.print("\t"); // -2359
+    Serial.print(accelgyro.getZAccelOffset()); Serial.print("\t"); // 1688
+    Serial.print(accelgyro.getXGyroOffset()); Serial.print("\t"); // 0
+    Serial.print(accelgyro.getYGyroOffset()); Serial.print("\t"); // 0
+    Serial.print(accelgyro.getZGyroOffset()); Serial.print("\t"); // 0
+    Serial.print("\n");
+    accelgyro.setXGyroOffset(220);
+    accelgyro.setYGyroOffset(76);
+    accelgyro.setZGyroOffset(-85);
+    Serial.print(accelgyro.getXAccelOffset()); Serial.print("\t"); // -76
+    Serial.print(accelgyro.getYAccelOffset()); Serial.print("\t"); // -2359
+    Serial.print(accelgyro.getZAccelOffset()); Serial.print("\t"); // 1688
+    Serial.print(accelgyro.getXGyroOffset()); Serial.print("\t"); // 0
+    Serial.print(accelgyro.getYGyroOffset()); Serial.print("\t"); // 0
+    Serial.print(accelgyro.getZGyroOffset()); Serial.print("\t"); // 0
+    Serial.print("\n");
+    */
 
  
 }
 
 void loop() {
 
+  //Read the GY521
+  accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
   
   //This is where ibus data is read from the serial port.
-    ch1=IBus.readChannel(0); // get latest value for servo channel 1
+  ch1=IBus.readChannel(0); // get latest value for servo channel 1
   ch2=IBus.readChannel(1); // get latest value for servo channel 2
   ch3=IBus.readChannel(2); // get latest value for servo channel 2
   ch4=IBus.readChannel(3); // get latest value for servo channel 2
@@ -128,23 +186,15 @@ void loop() {
       if (ch2>1500-deadband && ch2<1500+deadband)
         {ch2=1500;}
       throt=map(ch2, 1000,2000,-127,127);
+
+      
     
 
      
       mixing(steer,throt,LMot,RMot);
+
+      PWMDrive(LPin,RPin,LDirPin,RDirPin,LMot,RMot);
       
-
-    
-      //Throttle Control
-      motor1.setSpeed(LMot);
-      motor2.setSpeed(RMot);
-    
-      angle = map(steer, -500, 500, 0, 179);     // scaling the potentiometer value to angle value for servo between 0 and 180) 
-      servo_test.write(angle);                   //command to rotate the servo to the specified angle 
-
-      if(dbg){
-        Serial.print("Ang  : ");
-        Serial.println(angle);}
   }
   
   
@@ -220,6 +270,14 @@ void debugging(){
       Serial.println(RMot);
     }
 
+
+      Serial.print("a/g:\t");
+      Serial.print(ax); Serial.print("\t");
+      Serial.print(ay); Serial.print("\t");
+      Serial.print(az); Serial.print("\t");
+      Serial.print(gx); Serial.print("\t");
+      Serial.print(gy); Serial.print("\t");
+      Serial.println(gz);
 
     
     if(dbg){
