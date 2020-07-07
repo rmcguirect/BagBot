@@ -67,16 +67,25 @@ int pause;
 int16_t ax, ay, az;
 int16_t gx, gy, gz;
 
+//Accelerometer
+float accAngle;
+//Gyro
+int16_t gyroX, gyroRate;
+float gyroAngle=0;
+
+//Timming
+unsigned long currTime, prevTime=0, loopTime;
+
 
 //Output Variables
 //----------------
 int LMot;
-int LPin = 44;
-int LDirPin = 42;
+int LPin = 45;
+int LDirPin = 43;
 
 int RMot;
-int RPin = 45;
-int RDirPin = 43;
+int RPin = 44;
+int RDirPin = 42;
 
 
 
@@ -157,9 +166,24 @@ void setup() {
 }
 
 void loop() {
+  currTime = millis();
+  loopTime = currTime - prevTime;
+  prevTime = currTime;
+  
 
   //Read the GY521
   accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+  //Acceleration angle
+  accAngle = atan2(ax, az)*RAD_TO_DEG;
+  if(isnan(accAngle));
+  else
+    Serial.println(accAngle);
+
+  //Gyro Angle
+  gyroRate = map(gx, -32768, 32767, -250, 250);
+  gyroAngle = gyroAngle + (float)gyroRate*loopTime/1000;
+  Serial.println(gyroAngle);
 
   
   //This is where ibus data is read from the serial port.
@@ -179,7 +203,7 @@ void loop() {
     }else{
 
       //Add  Deadbands
-      if (ch1>1500-deadband && ch1<1500+deadband)
+      if (ch1>1500-deadband && ch1<1500+deadband) 
         {ch1=1500;}  \
       steer=map(ch1, 1000,2000,-127,127);
 
@@ -193,7 +217,7 @@ void loop() {
      
       mixing(steer,throt,LMot,RMot);
 
-      PWMDrive(LPin,RPin,LDirPin,RDirPin,LMot,RMot);
+      PWMDrive(LPin,RPin,LDirPin,RDirPin,RMot,LMot);
       
   }
   

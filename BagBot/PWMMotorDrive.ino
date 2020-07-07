@@ -1,6 +1,6 @@
 void PWMDrive(int LPin, int RPin, int LDirPin, int RDirPin, int& LVal, int& RVal){
   int LOut=0;
-  bool LDir=1;
+  bool LDir=0;
 
   int ROut=0;
   bool RDir=1;
@@ -11,7 +11,7 @@ void PWMDrive(int LPin, int RPin, int LDirPin, int RDirPin, int& LVal, int& RVal
 
   if (LVal<0)
   {
-    LDir=0;
+    LDir=1;
   }
 
   if (RVal<0)
@@ -21,6 +21,15 @@ void PWMDrive(int LPin, int RPin, int LDirPin, int RDirPin, int& LVal, int& RVal
 
   analogWrite(LPin,LOut);
   analogWrite(RPin,ROut);
+
+  Serial.println("Left Output:");
+  Serial.println(LOut);
+  Serial.println(LDir);
+
+  
+  Serial.println("Right Output:");
+  Serial.println(ROut);
+  Serial.println(RDir);
 
   digitalWrite(LDirPin, LDir);
   digitalWrite(RDirPin, RDir);
