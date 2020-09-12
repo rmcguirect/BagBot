@@ -1,5 +1,4 @@
 #include <Servo.h>
-
 #include <PID_v1.h>
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
@@ -219,13 +218,13 @@ void setup() {
 
 
 
-    //Serial.begin(115200);
+    Serial.begin(115200);
 
     LeftMotor.attach(LPin);
     RightMotor.attach(RPin);
     
     //Setup Radio Connection
-    IBus.begin(Serial);    // iBUS object connected to serial0 RX pin
+    IBus.begin(Serial3);    // iBUS object connected to serial3 RX pin
 
     // initialize device
     //Serial.println(F("Initializing I2C devices..."));
@@ -308,9 +307,7 @@ void loop() {
             previousLooptime = currentMillis;
 
             //Call the function to recieve the remote values
-            RadioRead();
-
-            
+            RadioRead();          
 
             
 
@@ -356,7 +353,14 @@ void loop() {
               }
 
             }
+            Serial.println(" ");
+            Serial.println("Roll: ");
+            Serial.println(roll);
+            LMot=0;
+            RMot=0;
             ServoPWMDrive(LeftMotor,RightMotor,LMot,RMot);
+            
+            
         }
 }
 

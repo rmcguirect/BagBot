@@ -9,5 +9,11 @@ void ServoPWMDrive(Servo LSer, Servo RSer, int& LVal, int& RVal){
 
   LSer.write(LVal);
   RSer.write(RVal);
+
+  Serial.println(" ");
+  Serial.println("LVal: ");
+  Serial.println(LVal);
+
+  
   
 }
