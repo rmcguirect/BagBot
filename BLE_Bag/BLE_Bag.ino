@@ -157,6 +157,8 @@ void setup() {
 };
 
 void loop() {
+  
+  while (central.connected()) {
       long currentMillis = millis();
       long previousMillis;
       // if 200ms have passed, check the battery level:
@@ -166,6 +168,18 @@ void loop() {
         //Update IMU
         Imu_Loop();
       }
+  }
+
+  
+  Serial.println("Disconnected");
+
+    // wait for a BLE central
+  bool BleReady=0;
+  
+  while (BleReady==0){
+    BleReady=Ble_Loop();
+  };
+      
 
   
 
