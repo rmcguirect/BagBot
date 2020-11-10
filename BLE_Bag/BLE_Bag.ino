@@ -3,12 +3,23 @@
 //________________________IMU__________________________
 //_____________________________________________________
 #include <Arduino_LSM9DS1.h>
+#include <ArduinoBLE.h>
 
 
 float Ax,Ay,Az;
 float Gx,Gy,Gz;
 int accelX=1;
 int accelY=1;
+int CtrlX,CtrlY;
+bool CtrlKill;
+int looptime;
+
+
+
+int oldBatteryLevel = 0;  // last battery level reading from analog input
+
+
+
 
 void Imu_Init()
 {
@@ -53,7 +64,7 @@ void Imu_Loop()
   //Check Gyro  
   Imu_gyro(Gx,Gy,Gz);
   
-}
+};
 
 //_____________________________________________________
 //______________________IMU END________________________
@@ -65,23 +76,43 @@ void Imu_Loop()
 //_____________________________________________________
 //________________________BLE__________________________
 //_____________________________________________________
-#include <ArduinoBLE.h>
+
 
 BLEDevice central;
+
+BLEUnsignedCharCharacteristic  customXChar("286e3be7-136d-4a2d-b209-2fd2e8582b5f", BLERead | BLENotify);
+BLEUnsignedCharCharacteristic  customYChar("d2352bdb-5a3e-40d7-bfb9-5374f857d517", BLERead | BLENotify);
+
+
+// Debug Service
+BLEService DebugService("947477fb-accc-481a-be54-7811e3130223");
+BLEByteCharacteristic RequestDebug("75e05785-6421-48f6-aa4c-61f01e8ab4cb",BLERead | BLEWrite | BLENotify);
+BLEByteCharacteristic LoopTimeDB("1250c35b-2981-4812-95d9-3e022ef5e952",BLERead | BLEWrite | BLENotify);
+BLEByteCharacteristic Message("e58285e9-1985-40d2-90b1-a3d95518e361",BLERead | BLEWrite | BLENotify);
+
+// PID Service
+BLEService PIDService("902243be-0018-11eb-adc1-0242ac120002");
+BLECharCharacteristic PChar("a2fa3960-0018-11eb-adc1-0242ac120002",BLERead | BLEWrite | BLENotify);
+BLECharCharacteristic IChar("a7337320-0018-11eb-adc1-0242ac120002",BLERead | BLEWrite | BLENotify);
+BLECharCharacteristic DChar("aad4a616-0018-11eb-adc1-0242ac120002",BLERead | BLEWrite | BLENotify);
+
+// Control Service
+BLEService ControlService("b7e18f72-0018-11eb-adc1-0242ac120002");
+BLEIntCharacteristic XChar("b386edc8-0018-11eb-adc1-0242ac120002",BLERead | BLEWrite);
+BLEIntCharacteristic YChar("afd24560-0018-11eb-adc1-0242ac120002 ",BLERead | BLEWrite);
+BLEIntCharacteristic KillChar("bc60cc7a-0018-11eb-adc1-0242ac120002",BLERead | BLEWrite | BLENotify);
+
+
 
 bool Ble_Init()
 {
   
-  // Create the Service and charecteristics For the IMU
-  BLEService customService("1101");
-  BLEUnsignedIntCharacteristic  customXChar("2101", BLERead | BLENotify);
-  BLEUnsignedIntCharacteristic  customYChar("2101", BLERead | BLENotify);
-
   // Initialize BLE
   if (!BLE.begin()) {
     Serial.println("starting BLE failed!");
     while (1);
     }
+  
     
   /* Set a local name for the BLE device
   This name will appear in advertising packets
@@ -89,12 +120,42 @@ bool Ble_Init()
   The name can be changed but maybe be truncated based on space left in advertisement packet
   */
   BLE.setLocalName("Bag Bot");
-  BLE.setAdvertisedService(customService); // add the service UUID
-  customService.addCharacteristic(customXChar); //
-  customService.addCharacteristic(customYChar); //
-  BLE.addService(customService);
-  customXChar.writeValue(accelX);
-  customYChar.writeValue(accelY);
+
+  BLE.setEventHandler(BLEConnected, blePeripheralConnectHandler);
+  BLE.setEventHandler(BLEDisconnected, blePeripheralDisconnectHandler);
+  
+
+  //Setup the Control Service
+  BLE.setAdvertisedService(ControlService); // add the service UUID
+  ControlService.addCharacteristic(XChar); //
+  ControlService.addCharacteristic(YChar); //
+//  ControlService.addCharacteristic(KillChar); //
+
+  BLE.addService(ControlService);
+
+  
+  
+//  ControlReadyChar.setEventHandler(BLEWritten, ControlWritten);
+//  ControlReadyChar.setValue(0);
+
+
+  //Setup the Debug Service
+  BLE.setAdvertisedService(DebugService); // add the service UUID
+  
+  DebugService.addCharacteristic(LoopTimeDB); //
+  DebugService.addCharacteristic(Message); //
+  DebugService.addCharacteristic(RequestDebug);
+  BLE.addService(DebugService);
+
+  //RequestDebug.setEventHandler(BLEWritten, DebugWrite);
+  //RequestDebug.setValue(0);
+
+
+
+
+
+
+  
 
   //Start advertising BLE.  It will start continuously transmitting BLE
   //advertising packets and will be visible to remote BLE central devices
@@ -119,6 +180,7 @@ bool Ble_Init()
 
 bool Ble_Loop()
 {
+  Serial.println("BLE Loop");
   //Check for a central
   central = BLE.central();
   
@@ -146,8 +208,10 @@ bool Ble_Loop()
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
-  while (!Serial);
+  //while (!Serial);
   Serial.println("Started");
+
+  
 
   //Initialize IMU
   Imu_Init();
@@ -162,26 +226,62 @@ void loop() {
       long currentMillis = millis();
       long previousMillis;
       // if 200ms have passed, check the battery level:
-      if (currentMillis - previousMillis >= 200) {
+      if (currentMillis - previousMillis >= 100) {
+        
+        looptime=currentMillis - previousMillis;
         previousMillis = currentMillis;
-
         //Update IMU
         Imu_Loop();
+        //DebugWrite();
+        
+        //TEMP CODE
+        Serial.println(XChar.value());
+
       }
   }
 
   
   Serial.println("Disconnected");
 
-    // wait for a BLE central
+  // wait for a BLE central
   bool BleReady=0;
-  
   while (BleReady==0){
     BleReady=Ble_Loop();
   };
+};
       
 
-  
+void blePeripheralConnectHandler(BLEDevice central) {
+  // central connected event handler
+  Serial.print("Connected event, central: ");
+  Serial.println(central.address());
+}
+
+void blePeripheralDisconnectHandler(BLEDevice central) {
+  // central disconnected event handler
+  Serial.print("Disconnected event, central: ");
+  Serial.println(central.address());
+}
 
 
+void ControlWritten(BLEDevice central, BLECharacteristic characteristic) 
+{
+//    Serial.print(XChar.value());
+//    CtrlX=XChar.value();
+//    CtrlY=YChar.value();
+//    CtrlKill=KillChar.value();
+//
+//    DebugWrite(CtrlX);
+
+};
+
+//void DebugWrite(BLEDevice central, BLECharacteristic characteristic) 
+
+
+void DebugWrite(int msg) 
+{
+      Serial.println(looptime);
+      LoopTimeDB.writeValue(looptime);
+      Message.writeValue(msg);
+      
 };
